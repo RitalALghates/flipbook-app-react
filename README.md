@@ -1,70 +1,78 @@
-# Getting Started with Create React App
+# 📖 eInvoiceMe Interactive Flipbook
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+An **interactive digital company profile** for **eInvoiceMe** — a Saudi e-invoicing (ZATCA / Fatoora) provider.
+Readers flip through realistic book pages in the browser and can **export the current page to PDF**.
+The content is in **Arabic (RTL)**.
 
-## Available Scripts
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![react-pageflip](https://img.shields.io/badge/react--pageflip-page%20flip-1d3557)
+![jsPDF](https://img.shields.io/badge/jsPDF-PDF%20export-e63946)
+![Tests](https://img.shields.io/badge/tests-Jest%20%2B%20RTL-C21325?logo=jest&logoColor=white)
 
-In the project directory, you can run:
+<p align="center">
+  <img src="docs/screenshots/01-cover.jpg" width="24%" alt="Cover">
+  <img src="docs/screenshots/02-contents.jpg" width="24%" alt="Table of contents">
+  <img src="docs/screenshots/03-company.jpg" width="24%" alt="Company overview">
+  <img src="docs/screenshots/04-services.jpg" width="24%" alt="Services">
+</p>
 
-### `npm start`
+## Features
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- **Realistic page flipping** (click, swipe or arrow buttons) powered by `react-pageflip`
+- **Export to PDF** – captures the visible page with `html2canvas` and saves it as an A4 PDF with `jsPDF`
+- **Eight designed pages:** cover · table of contents · company overview · vision & mission · services ·
+  how to create an e-invoice · contact information (Jeddah and Makkah branches) · thank-you page
+- Dark "space" background with animated stars and a fixed 600 × 800 book format
+- Full **Arabic RTL** content
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Pages
 
-### `npm test`
+| # | Page | Content |
+| --- | --- | --- |
+| 1 | Cover | eInvoiceMe logo and tagline |
+| 2 | Table of contents | Links the sections to their page numbers |
+| 3 | Company overview | Who eInvoiceMe is and its ZATCA compliance focus |
+| 4 | Vision & mission | Where the company is heading and why |
+| 5 | Services | Cloud e-invoicing, ZATCA integration, QR / UUID generation, multi-user dashboard, accounting API, support |
+| 6 | Create an e-invoice | Step-by-step guide |
+| 7 | Contact | Branch addresses, e-mail and phone |
+| 8 | Thank you | Closing page |
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Getting started
 
-### `npm run build`
+```bash
+git clone https://github.com/RitalALghates/flipbook-app-react.git
+cd flipbook-app-react
+npm install
+npm start          # http://localhost:3000
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+| Script | What it does |
+| --- | --- |
+| `npm start` | Development server with hot reload |
+| `npm run build` | Optimised production build in `build/` |
+| `npm test` | Runs the Jest + React Testing Library test suite |
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Customising the content
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+All pages live in [`src/App.js`](src/App.js) as `<div className="page">` blocks inside `<HTMLFlipBook>`.
+To add a page, copy an existing block (use `page page-formal content-page numbered-page` and set
+`data-page-number`). Styling is in [`src/App.css`](src/App.css); the logo is [`public/logo.png`](public/logo.png).
 
-### `npm run eject`
+## Tech stack
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+React 19 · Create React App · [react-pageflip](https://github.com/Nodlik/react-pageflip) ·
+[jsPDF](https://github.com/parallax/jsPDF) · [html2canvas](https://html2canvas.hertzen.com/) ·
+Jest + React Testing Library
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Project structure
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+```text
+public/        index.html, manifest and logo assets
+src/
+├── App.js     Flipbook pages, navigation and PDF export
+├── App.css    Layout, book and page styling
+├── App.test.js  Smoke test
+└── index.js   App entry point
+docs/screenshots/  README images
+```
