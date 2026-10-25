@@ -1,19 +1,120 @@
-import React, { useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import HTMLFlipBook from "react-pageflip";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import "./App.css";
 
+const BOOK_WIDTH = 600;
+const BOOK_HEIGHT = 800;
+
+const TOC = [
+  { title: "تعريف بالشركة", page: 2 },
+  { title: "رؤيتنا ورسالتنا", page: 3 },
+  { title: "الخدمات التي نقدمها", page: 4 },
+  { title: "دليل إنشاء فاتورة إلكترونية", page: 5 },
+  { title: "معلومات التواصل", page: 6 },
+];
+
+const SERVICES = [
+  { icon: "☁️", title: "منصة فوترة إلكترونية سحابية", text: "لإنشاء وإصدار وحفظ الفواتير بشكل آمن." },
+  { icon: "🔗", title: "التكامل مع هيئة الزكاة", text: 'من خلال الربط المباشر مع منصة "فاتورة".' },
+  { icon: "🧾", title: 'توليد "QR Code" و"UUID"', text: "تلقائيًا حسب متطلبات الهيئة." },
+  { icon: "📊", title: "لوحة تحكم متعددة المستخدمين", text: "لإدارة الفواتير والعملاء والتقارير." },
+  { icon: "🧩", title: "تكامل مرن مع الأنظمة المحاسبية", text: 'باستخدام "API".' },
+  { icon: "🛟", title: "دعم فني", text: "قبل وأثناء وبعد التفعيل." },
+];
+
+const STEPS = [
+  "تسجيل الدخول إلى لوحة التحكم باستخدام البريد وكلمة المرور.",
+  'من القائمة الرئيسية، اضغط على "إنشاء فاتورة جديدة".',
+  "أدخل بيانات العميل مثل الاسم، الرقم الضريبي، المدينة، إلخ.",
+  "أضف المنتجات أو الخدمات مع الكمية، السعر، والضريبة لكل بند.",
+  'النظام سيحسب الإجمالي والضريبة تلقائيًا ويولّد "QR" و"UUID".',
+  'راجع تفاصيل الفاتورة واضغط على "إرسال" لتقديمها.',
+  'يمكنك تحميل الفاتورة بصيغة "PDF" أو إرسالها بالبريد للعميل.',
+];
+
+const TOTAL_PAGES = 8;
+
+/** Supports deep links such as /?page=5 (1-based page number). */
+function getInitialPage() {
+  const requested = Number(new URLSearchParams(window.location.search).get("page"));
+  if (!Number.isInteger(requested) || requested < 1 || requested > TOTAL_PAGES) return 0;
+  return requested - 1;
+}
+
+/** Fits the fixed-size book into small screens by scaling it down. */
+function useBookScale() {
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const update = () => {
+      const byWidth = (window.innerWidth - 32) / BOOK_WIDTH;
+      const byHeight = (window.innerHeight - 230) / BOOK_HEIGHT;
+      setScale(Math.max(0.3, Math.min(1, byWidth, byHeight)));
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  return scale;
+}
+
+function PageChrome({ section, number, children }) {
+  return (
+    <div className="page-shell">
+      <div className="page-header">
+        <span className="brand-mini">
+          <i className="brand-dot" /> eInvoiceMe
+        </span>
+        <span className="section-label">{section}</span>
+      </div>
+      <div className="page-inner">{children}</div>
+      <div className="page-footer">
+        <span className="footer-line" />
+        <span className="footer-number">{number}</span>
+        <span className="footer-line" />
+      </div>
+    </div>
+  );
+}
+
+function Title({ children }) {
+  return (
+    <>
+      <h2>{children}</h2>
+      <div className="title-bar" />
+    </>
+  );
+}
+
 function App() {
   const flipBookRef = useRef(null);
+  const scaleRef = useRef(null);
+  const scale = useBookScale();
+  const [initialPage] = useState(getInitialPage);
+  const [current, setCurrent] = useState(initialPage);
+
+  const flipNext = useCallback(() => flipBookRef.current?.pageFlip().flipNext(), []);
+  const flipPrev = useCallback(() => flipBookRef.current?.pageFlip().flipPrev(), []);
+  const goTo = (index) => flipBookRef.current?.pageFlip().flip(index);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "ArrowRight" || e.key === "PageDown") flipNext();
+      if (e.key === "ArrowLeft" || e.key === "PageUp") flipPrev();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [flipNext, flipPrev]);
 
   const exportToPDF = async () => {
     const pdf = new jsPDF("p", "mm", "a4");
-    const currentPageIndex = flipBookRef.current
-      .pageFlip()
-      .getCurrentPageIndex();
-
+    const currentPageIndex = flipBookRef.current.pageFlip().getCurrentPageIndex();
     const allPages = document.querySelectorAll(".page");
+    const scaler = scaleRef.current;
+    const previousTransform = scaler ? scaler.style.transform : "";
+    if (scaler) scaler.style.transform = "none"; // capture at full size
+
     allPages.forEach((page, index) => {
       if (index !== currentPageIndex) {
         page.style.opacity = "0";
@@ -57,279 +158,276 @@ function App() {
     } catch (err) {
       console.warn(`فشل تصدير الصفحة: ${err.message}`);
     } finally {
-      allPages.forEach((page) => {
-        page.style.opacity = "";
-        page.style.pointerEvents = "";
-        page.style.position = "";
-        page.style.zIndex = "";
+      allPages.forEach((p) => {
+        p.style.opacity = "";
+        p.style.pointerEvents = "";
+        p.style.position = "";
+        p.style.zIndex = "";
       });
+      if (scaler) scaler.style.transform = previousTransform;
     }
   };
 
+  const progress = (current / (TOTAL_PAGES - 1)) * 100;
+
   return (
     <div className="App">
-      <div className="book-wrapper" style={{ overflow: "hidden" }}>
-        <button
-          className="arrow left-arrow"
-          onClick={() => flipBookRef.current.pageFlip().flipPrev()}
-          aria-label="السابق"
-        >
-          ←
+      <div className="aurora" aria-hidden="true">
+        <span /><span /><span />
+      </div>
+      <div className="stars" aria-hidden="true">
+        {Array.from({ length: 16 }).map((_, i) => (
+          <span key={i} className="star" />
+        ))}
+      </div>
+
+      <header className="app-header">
+        <span className="app-eyebrow">COMPANY PROFILE</span>
+        <h1>eInvoiceMe</h1>
+      </header>
+
+      <div
+        className="book-stage"
+        style={{ width: BOOK_WIDTH * scale, height: BOOK_HEIGHT * scale }}
+      >
+        <button className="arrow left-arrow" onClick={flipPrev} aria-label="السابق">
+          ‹
         </button>
 
-        <div className="book-container" style={{ overflow: "hidden" }}>
-          <HTMLFlipBook
-            ref={flipBookRef}
-            width={600}
-            height={800}
-            showCover={true}
-            startPage={0}
-            flippingTime={800}
-            size="fixed"
-            minWidth={600}
-            maxWidth={600}
-            minHeight={800}
-            maxHeight={800}
-            autoSize={false}
-            useMouseEvents={true}
-            swipeDistance={30}
-            disableFlipByClick={false}
-            clickEventForward={false}
-            className="demo-book"
-            style={{ overflow: "visible" }}
-          >
-            {/* الغلاف */}
-            <div className="page cover-page">
-              <div className="top-center">
-                <img
-                  src="/logo.png"
-                  alt="شعار eInvoiceMe"
-                  style={{ width: "200px", marginBottom: "40px" }}
-                />
-                <p className="cover-welcome">
-                  تمكين عملك بحلول الفوترة الرقمية الذكية
-                </p>
-              </div>
-            </div>
-
-            {/* جدول المحتويات */}
-            <div className="page page-formal">
-              <div
-                className="top-center"
-                style={{ overflowY: "auto", maxHeight: "100%" }}
-              >
-                <h2>جدول المحتويات</h2>
-                <ul
-                  className="toc"
-                  style={{ direction: "rtl", textAlign: "center" }}
-                >
-                  <li>
-                    <span className="page-number">صفحة 3</span> .......... تعريف
-                    بالشركة
-                  </li>
-                  <li>
-                    <span className="page-number">صفحة 4</span> ..........
-                    رؤيتنا ورسالتنا
-                  </li>
-                  <li>
-                    <span className="page-number">صفحة 5</span> ..........
-                    الخدمات التي نقدمها
-                  </li>
-                  <li>
-                    <span className="page-number">صفحة 6</span> .......... دليل
-                    إنشاء فاتورة إلكترونية
-                  </li>
-                  <li>
-                    <span className="page-number">صفحة 7</span> ..........
-                    معلومات التواصل
-                  </li>
-                </ul>
-              </div>
-            </div>
-
-            {/* تعريف بالشركة */}
-            <div
-              className="page page-formal content-page numbered-page"
-              data-page-number="3"
+        <div
+          ref={scaleRef}
+          className="book-scale"
+          style={{ transform: `scale(${scale})` }}
+        >
+          <div className="book-container">
+            <HTMLFlipBook
+              ref={flipBookRef}
+              width={BOOK_WIDTH}
+              height={BOOK_HEIGHT}
+              showCover={true}
+              startPage={initialPage}
+              flippingTime={900}
+              size="fixed"
+              minWidth={BOOK_WIDTH}
+              maxWidth={BOOK_WIDTH}
+              minHeight={BOOK_HEIGHT}
+              maxHeight={BOOK_HEIGHT}
+              autoSize={false}
+              useMouseEvents={true}
+              swipeDistance={30}
+              disableFlipByClick={false}
+              clickEventForward={false}
+              maxShadowOpacity={0.45}
+              onFlip={(e) => setCurrent(e.data)}
+              className="demo-book"
+              style={{ overflow: "visible" }}
             >
-              <div className="top-center">
-                <h2>تعريف بالشركة</h2>
-                <p>
-                  شركة eInvoiceMe هي شركة تقنية سعودية متخصصة في تقديم حلول
-                  الفوترة الإلكترونية السحابية، تساعد الشركات على الالتزام
-                  بمتطلبات هيئة الزكاة والضريبة والجمارك (ZATCA). نحن نوفر
-                  نظامًا موثوقًا وآمنًا لإنشاء وحفظ وإرسال الفواتير إلكترونيًا،
-                  مما يضمن التوافق مع الأنظمة واللوائح المحلية ويوفر تجربة
-                  استخدام سلسة وسريعة.
-                </p>
+              {/* 1 · الغلاف */}
+              <div className="page cover-page">
+                <div className="cover-shell">
+                <div className="cover-rings" aria-hidden="true" />
+                <div className="cover-content">
+                  <div className="cover-logo">
+                    <img src="/logo.png" alt="شعار eInvoiceMe" />
+                  </div>
+                  <p className="cover-welcome">تمكين عملك بحلول الفوترة الرقمية الذكية</p>
+                  <span className="cover-chip">ZATCA · FATOORA</span>
+                </div>
+                </div>
               </div>
-            </div>
 
-            {/* رؤيتنا ورسالتنا */}
-            <div
-              className="page page-formal content-page numbered-page"
-              data-page-number="4"
-            >
-              <div className="top-center">
-                <h2>رؤيتنا ورسالتنا</h2>
-                <p>
-                  <strong>رؤيتنا:</strong> أن نكون من الرواد في مجال حلول
-                  الفوترة الرقمية داخل المملكة العربية السعودية، من خلال تقديم
-                  تقنيات حديثة تدعم التحول الرقمي الوطني.
-                </p>
-                <p>
-                  <strong>رسالتنا:</strong> نهدف إلى تبسيط عملية الفوترة
-                  الإلكترونية للشركات، عبر تقديم أدوات ذكية، متوافقة، وآمنة،
-                  تساعد على الامتثال الكامل لأنظمة هيئة الزكاة، وتحقق الكفاءة
-                  التشغيلية العالية.
-                </p>
+              {/* 2 · جدول المحتويات */}
+              <div className="page page-formal">
+                <PageChrome section="الفهرس" number="2">
+                  <Title>جدول المحتويات</Title>
+                  <ul className="toc">
+                    {TOC.map((item) => (
+                      <li key={item.page}>
+                        <button type="button" className="toc-row" onClick={() => goTo(item.page)}>
+                          <span className="toc-num">{item.page + 1}</span>
+                          <span className="toc-title">{item.title}</span>
+                          <span className="toc-dots" />
+                          <span className="page-number">صفحة {item.page + 1}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="toc-hint">اضغط على أي عنوان للانتقال مباشرة إلى صفحته ✦</p>
+                </PageChrome>
               </div>
-            </div>
 
-            {/* الخدمات التي نقدمها */}
-            <div
-              className="page page-formal content-page numbered-page"
-              data-page-number="5"
-            >
-              <div className="top-center">
-                <h2>الخدمات التي نقدمها</h2>
-                <ul style={{ direction: "rtl", textAlign: "center" }}>
-                  <li>
-                    منصة فوترة إلكترونية سحابية: لإنشاء وإصدار وحفظ الفواتير
-                    بشكل آمن.
-                  </li>
-                  <li>
-                    التكامل مع هيئة الزكاة: من خلال الربط المباشر مع منصة
-                    "فاتورة".
-                  </li>
-                  <li>توليد "QR Code" و"UUID": تلقائيًا حسب متطلبات الهيئة.</li>
-                  <li>
-                    لوحة تحكم متعددة المستخدمين: لإدارة الفواتير والعملاء
-                    والتقارير.
-                  </li>
-                  <li>تكامل مرن مع الأنظمة المحاسبية: باستخدام "API".</li>
-                  <li>دعم فني: قبل وأثناء وبعد التفعيل.</li>
-                </ul>
+              {/* 3 · تعريف بالشركة */}
+              <div className="page page-formal">
+                <PageChrome section="من نحن" number="3">
+                  <Title>تعريف بالشركة</Title>
+                  <p className="lead">
+                    شركة eInvoiceMe هي شركة تقنية سعودية متخصصة في تقديم حلول الفوترة
+                    الإلكترونية السحابية، تساعد الشركات على الالتزام بمتطلبات هيئة الزكاة
+                    والضريبة والجمارك (ZATCA). نحن نوفر نظامًا موثوقًا وآمنًا لإنشاء وحفظ
+                    وإرسال الفواتير إلكترونيًا، مما يضمن التوافق مع الأنظمة واللوائح المحلية
+                    ويوفر تجربة استخدام سلسة وسريعة.
+                  </p>
+                  <div className="pill-row">
+                    <div className="pill-card">
+                      <b>ZATCA</b>
+                      <span>متوافق مع الهيئة</span>
+                    </div>
+                    <div className="pill-card">
+                      <b>Cloud</b>
+                      <span>حلول سحابية</span>
+                    </div>
+                    <div className="pill-card">
+                      <b>Secure</b>
+                      <span>موثوق وآمن</span>
+                    </div>
+                  </div>
+                  <div className="banner-card ltr">
+                    <span className="banner-mark">✦</span>
+                    <p>Powering businesses thrive under vision 2030</p>
+                  </div>
+                </PageChrome>
               </div>
-            </div>
 
-            {/* دليل إنشاء فاتورة إلكترونية */}
-            <div
-              className="page page-formal content-page numbered-page"
-              data-page-number="6"
-            >
-              <div className="top-center">
-                <h2>دليل إنشاء فاتورة إلكترونية</h2>
-                <p>اتبع الخطوات التالية لإنشاء فاتورة إلكترونية:</p>
-                <ul style={{ direction: "rtl", textAlign: "center" }}>
-                  <li>
-                    تسجيل الدخول إلى لوحة التحكم باستخدام البريد وكلمة المرور.
-                  </li>
-                  <li>من القائمة الرئيسية، اضغط على "إنشاء فاتورة جديدة".</li>
-                  <li>
-                    أدخل بيانات العميل مثل الاسم، الرقم الضريبي، المدينة، إلخ.
-                  </li>
-                  <li>
-                    أضف المنتجات أو الخدمات مع الكمية، السعر، والضريبة لكل بند.
-                  </li>
-                  <li>
-                    النظام سيحسب الإجمالي والضريبة تلقائيًا ويولّد "QR" و"UUID".
-                  </li>
-                  <li>راجع تفاصيل الفاتورة واضغط على "إرسال" لتقديمها.</li>
-                  <li>
-                    يمكنك تحميل الفاتورة بصيغة "PDF" أو إرسالها بالبريد للعميل.
-                  </li>
-                </ul>
+              {/* 4 · رؤيتنا ورسالتنا */}
+              <div className="page page-formal">
+                <PageChrome section="التوجه" number="4">
+                  <Title>رؤيتنا ورسالتنا</Title>
+                  <div className="vm-card">
+                    <div className="vm-icon">🔭</div>
+                    <div>
+                      <h3>رؤيتنا</h3>
+                      <p>
+                        أن نكون من الرواد في مجال حلول الفوترة الرقمية داخل المملكة العربية
+                        السعودية، من خلال تقديم تقنيات حديثة تدعم التحول الرقمي الوطني.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="vm-card alt">
+                    <div className="vm-icon">🎯</div>
+                    <div>
+                      <h3>رسالتنا</h3>
+                      <p>
+                        نهدف إلى تبسيط عملية الفوترة الإلكترونية للشركات، عبر تقديم أدوات
+                        ذكية، متوافقة، وآمنة، تساعد على الامتثال الكامل لأنظمة هيئة الزكاة،
+                        وتحقق الكفاءة التشغيلية العالية.
+                      </p>
+                    </div>
+                  </div>
+                </PageChrome>
               </div>
-            </div>
 
-            {/* معلومات التواصل */}
-           <div
-  className="page page-formal content-page numbered-page"
-  data-page-number="7"
->
-  <div
-    className="top-center"
-    style={{ textAlign: "right", direction: "rtl", paddingRight: "40px", lineHeight: "1.8" }}
-  >
-    <h2 style={{ textAlign: "center" }}>معلومات التواصل</h2>
-
-    <p>
-      <strong>فرع جدة</strong><br />
-      مكتب فايبس – الدور الرابع<br />
-      مركز U Shape – شارع الأمير سعود الفيصل<br />
-      حي الروضة، جدة 23431، السعودية
-    </p>
-
-    <p>
-      <strong>فرع مكة</strong><br />
-      شارع إبراهيم بن النبي – الدور الثاني<br />
-      حي التخصصي، مكة 24331، السعودية
-    </p>
-
-    <p>
-      <strong>البريد الإلكتروني</strong><br />
-      <a
-        href="mailto:sales@einvoiceme.com"
-        style={{
-          color: "#007bff",
-          textDecoration: "underline",
-          direction: "ltr",
-          display: "inline-block",
-        }}
-      >
-        sales@einvoiceme.com
-      </a>
-    </p>
-
-    <p>
-      <strong>رقم الهاتف</strong><br />
-      +966 50 365 9839
-    </p>
-  </div>
-</div>
-
-
-            {/* صفحة ختامية */}
-            <div className="page cover-page">
-              <div className="top-center">
-                <h3>شكرًا لكم</h3>
-                <p>
-                  نتطلع لبناء شراكة دائمة معكم، وتعزيز نجاح أعمالكم من خلال
-                  حلولنا الذكية للفوترة الإلكترونية.
-                </p>
+              {/* 5 · الخدمات */}
+              <div className="page page-formal">
+                <PageChrome section="خدماتنا" number="5">
+                  <Title>الخدمات التي نقدمها</Title>
+                  <div className="svc-grid">
+                    {SERVICES.map((s) => (
+                      <div key={s.title} className="svc-card">
+                        <span className="svc-icon">{s.icon}</span>
+                        <h4>{s.title}</h4>
+                        <p>{s.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </PageChrome>
               </div>
-            </div>
-          </HTMLFlipBook>
+
+              {/* 6 · دليل إنشاء فاتورة */}
+              <div className="page page-formal">
+                <PageChrome section="الدليل" number="6">
+                  <Title>دليل إنشاء فاتورة إلكترونية</Title>
+                  <p className="sub">اتبع الخطوات التالية لإنشاء فاتورة إلكترونية:</p>
+                  <ol className="steps">
+                    {STEPS.map((text, i) => (
+                      <li key={i}>
+                        <span className="step-num">{i + 1}</span>
+                        <span className="step-text">{text}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </PageChrome>
+              </div>
+
+              {/* 7 · معلومات التواصل */}
+              <div className="page page-formal">
+                <PageChrome section="تواصل معنا" number="7">
+                  <Title>معلومات التواصل</Title>
+                  <div className="contact-grid">
+                    <div className="contact-card">
+                      <span className="contact-icon">📍</span>
+                      <h4>فرع جدة</h4>
+                      <p>
+                        مكتب فايبس – الدور الرابع<br />
+                        مركز U Shape – شارع الأمير سعود الفيصل<br />
+                        حي الروضة، جدة 23431، السعودية
+                      </p>
+                    </div>
+                    <div className="contact-card">
+                      <span className="contact-icon">📍</span>
+                      <h4>فرع مكة</h4>
+                      <p>
+                        شارع إبراهيم بن النبي – الدور الثاني<br />
+                        حي التخصصي، مكة 24331، السعودية
+                      </p>
+                    </div>
+                    <div className="contact-card wide">
+                      <span className="contact-icon">✉️</span>
+                      <h4>البريد الإلكتروني</h4>
+                      <a className="ltr" href="mailto:sales@einvoiceme.com">sales@einvoiceme.com</a>
+                    </div>
+                    <div className="contact-card wide">
+                      <span className="contact-icon">📞</span>
+                      <h4>رقم الهاتف</h4>
+                      <p className="ltr">+966 50 365 9839</p>
+                    </div>
+                  </div>
+                </PageChrome>
+              </div>
+
+              {/* 8 · صفحة ختامية */}
+              <div className="page cover-page">
+                <div className="cover-shell">
+                <div className="cover-rings" aria-hidden="true" />
+                <div className="cover-content">
+                  <div className="thanks-mark">✦</div>
+                  <h3 className="thanks-title">شكرًا لكم</h3>
+                  <p className="thanks-text">
+                    نتطلع لبناء شراكة دائمة معكم، وتعزيز نجاح أعمالكم من خلال حلولنا الذكية
+                    للفوترة الإلكترونية.
+                  </p>
+                  <span className="cover-chip ltr">sales@einvoiceme.com</span>
+                </div>
+                </div>
+              </div>
+            </HTMLFlipBook>
+          </div>
         </div>
 
-        <button
-          className="arrow right-arrow"
-          onClick={() => flipBookRef.current.pageFlip().flipNext()}
-          aria-label="التالي"
-        >
-          →
+        <button className="arrow right-arrow" onClick={flipNext} aria-label="التالي">
+          ›
         </button>
       </div>
 
-      <div className="navigation-buttons">
-        <button
-          className="nav-button back-button"
-          onClick={() => flipBookRef.current.pageFlip().flipPrev()}
-        >
+      <div className="toolbar">
+        <button className="tool-btn" onClick={flipPrev}>
           السابق
         </button>
-        <button
-          className="nav-button forward-button"
-          onClick={() => flipBookRef.current.pageFlip().flipNext()}
-        >
+        <div className="progress-wrap" role="status" aria-live="polite">
+          <span className="progress-text">
+            {current + 1} / {TOTAL_PAGES}
+          </span>
+          <div className="progress-track">
+            <div className="progress-fill" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+        <button className="tool-btn" onClick={flipNext}>
           التالي
         </button>
+        <button className="tool-btn pdf" onClick={exportToPDF} aria-label="PDF">
+          PDF
+        </button>
       </div>
-
-      <button className="download-button" onClick={exportToPDF}>
-        PDF
-      </button>
+      <p className="hint">اسحب الصفحة أو استخدم الأسهم ← → للتنقل</p>
     </div>
   );
 }
